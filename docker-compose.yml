@@ -5,8 +5,29 @@ networks:
       config:
         - subnet: 10.53.0.0/24
 
+volumes:
+  unbound:
+  wireguard:
+  wireguard-ui:
+  pihole-etc:
+  pihole-dnsmasq:
+  duckdns:
 
 services:
+  
+  gitsync:
+    image: k8s.gcr.io/git-sync:v3.1.3
+    volumes:
+      - unbound:/tmp
+    environment:
+      GIT_SYNC_REPO: https://github.com/gparrello/wirehole
+      GIT_SYNC_BRANCH: master
+      # GIT_SYNC_ROOT: /tmp
+      GIT_SYNC_DEST: wirehole
+      # GIT_SYNC_PERIOD: 20
+      GIT_SYNC_ONE_TIME: true
+      # GIT_SYNC_SPARSE_CHECKOUT_FILE: unbound
+
   duckdns:
     image: lscr.io/linuxserver/duckdns:latest
     container_name: duckdns
@@ -15,24 +36,52 @@ services:
       - TOKEN
       - SUBDOMAINS=gparrello
       - TZ=Europe/Madrid
-      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
     volumes:
-      - ${CONTAINER_DATA_PATH}/duckdns/config:/config
+      - duckdns:/config
 
   unbound:
+    depends_on:
+      - gitsync
     image: mvance/unbound:latest
     container_name: unbound
     restart: unless-stopped
     hostname: unbound
-    environment:
-      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
     volumes:
-      - ${CONTAINER_DATA_PATH}/unbound:/opt/unbound/etc/unbound/
+      - unbound/git/wirehole/unbound:/opt/unbound/etc/unbound/  # TODO: fix, can't mount volume subpath only
     networks:
       private_network:
         ipv4_address: 10.53.0.200
     cap_add:
       - NET_ADMIN
+  
+  pihole:
+    depends_on:
+      - unbound
+    container_name: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    hostname: pihole
+    dns:
+      - 127.0.0.1
+      - ${PIHOLE_DNS}
+    volumes:
+      - pihole-etc:/etc/pihole/
+      - pihole-dnsmasq:/etc/dnsmasq.d/
+    cap_add:
+      - NET_ADMIN
+    networks:
+      private_network:
+        ipv4_address: 10.53.0.100
+    ports:
+      # - "53:53/tcp"
+      # - "53:53/udp"
+      # - "67:67/udp"
+      - "5380:80"
+    environment:
+      - TZ=Europe/Madrid
+      - WEBPASSWORD=admin
+      - PIHOLE_DNS_=10.53.0.200
+      - DNSSEC=true
 
   wireguard:
     depends_on:
@@ -51,9 +100,7 @@ services:
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv4.ip_forward=1
     volumes:
-      - ${CONTAINER_DATA_PATH}/config:/config
-    environment:
-      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
+      - wireguard:/config
 
   wireguard-ui:
     image: ngoduykhanh/wireguard-ui:latest
@@ -68,39 +115,9 @@ services:
       options:
         max-size: 50m
     volumes:
-      - ${CONTAINER_DATA_PATH}/db:/app/db
-      - ${CONTAINER_DATA_PATH}/config:/config
+      - wireguard-ui/db:/app/db
+      - wireguard:/config
     environment:
       - WGUI_DNS=10.53.0.100
       - SUBNET_RANGES=10.80.1.0/24
       - WGUI_ENDPOINT_ADDRESS=gparrello.duckdns.org:51888
-      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
-
-  pihole:
-    depends_on:
-      - unbound
-    container_name: pihole
-    image: pihole/pihole:latest
-    restart: unless-stopped
-    hostname: pihole
-    dns:
-      - 127.0.0.1
-      - ${PIHOLE_DNS_}
-    volumes:
-      - ${CONTAINER_DATA_PATH}/etc-pihole/:/etc/pihole/
-      - ${CONTAINER_DATA_PATH}/etc-dnsmasq.d/:/etc/dnsmasq.d/
-    cap_add:
-      - NET_ADMIN
-    networks:
-      private_network:
-        ipv4_address: 10.53.0.100
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "67:67/udp"
-      - "5380:80"
-    environment:
-      - TZ=Europe/Madrid
-      - WEBPASSWORD=admin
-      - PIHOLE_DNS_=10.53.0.200
-      - DNSSEC=true
