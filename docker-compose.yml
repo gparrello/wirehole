@@ -79,7 +79,7 @@ services:
     hostname: pihole
     dns:
       - 127.0.0.1
-      - ${PIHOLE_DNS}
+      - ${PIHOLE_DNS_}
     volumes:
       - ./data/etc-pihole/:/etc/pihole/
       - ./data/etc-dnsmasq.d/:/etc/dnsmasq.d/
