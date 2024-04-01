@@ -3,7 +3,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 10.2.0.0/24
+        - subnet: 10.53.0.0/24
 
 
 services:
@@ -15,19 +15,22 @@ services:
       - TOKEN
       - SUBDOMAINS=gparrello
       - TZ=Europe/Madrid
+      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
     volumes:
-      - ./data/duckdns/config:/config
+      - ${CONTAINER_DATA_PATH}/duckdns/config:/config
 
   unbound:
     image: mvance/unbound:latest
     container_name: unbound
     restart: unless-stopped
     hostname: unbound
+    environment:
+      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
     volumes:
-      - ./unbound:/opt/unbound/etc/unbound/
+      - ${CONTAINER_DATA_PATH}/unbound:/opt/unbound/etc/unbound/
     networks:
       private_network:
-        ipv4_address: 10.2.0.200
+        ipv4_address: 10.53.0.200
     cap_add:
       - NET_ADMIN
 
@@ -48,7 +51,9 @@ services:
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv4.ip_forward=1
     volumes:
-      - ./data/config:/config
+      - ${CONTAINER_DATA_PATH}/config:/config
+    environment:
+      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
 
   wireguard-ui:
     image: ngoduykhanh/wireguard-ui:latest
@@ -63,12 +68,13 @@ services:
       options:
         max-size: 50m
     volumes:
-      - ./data/db:/app/db
-      - ./data/config:/config
+      - ${CONTAINER_DATA_PATH}/db:/app/db
+      - ${CONTAINER_DATA_PATH}/config:/config
     environment:
-      - WGUI_DNS=10.2.0.100
+      - WGUI_DNS=10.53.0.100
       - SUBNET_RANGES=10.80.1.0/24
       - WGUI_ENDPOINT_ADDRESS=gparrello.duckdns.org:51888
+      - CONTAINER_DATA_PATH=/home/gerardo/.container-data/wirehole
 
   pihole:
     depends_on:
@@ -81,13 +87,13 @@ services:
       - 127.0.0.1
       - ${PIHOLE_DNS_}
     volumes:
-      - ./data/etc-pihole/:/etc/pihole/
-      - ./data/etc-dnsmasq.d/:/etc/dnsmasq.d/
+      - ${CONTAINER_DATA_PATH}/etc-pihole/:/etc/pihole/
+      - ${CONTAINER_DATA_PATH}/etc-dnsmasq.d/:/etc/dnsmasq.d/
     cap_add:
       - NET_ADMIN
     networks:
       private_network:
-        ipv4_address: 10.2.0.100
+        ipv4_address: 10.53.0.100
     ports:
       - "53:53/tcp"
       - "53:53/udp"
@@ -96,5 +102,5 @@ services:
     environment:
       - TZ=Europe/Madrid
       - WEBPASSWORD=admin
-      - PIHOLE_DNS_=10.2.0.200
+      - PIHOLE_DNS_=10.53.0.200
       - DNSSEC=true
