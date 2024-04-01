@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       - TOKEN
-      - SUBDOMAINS
+      - SUBDOMAINS=gparrello
       - TZ=Europe/Madrid
     volumes:
       - ./data/duckdns/config:/config
@@ -65,6 +65,10 @@ services:
     volumes:
       - ./data/db:/app/db
       - ./data/config:/config
+    environment:
+      - WGUI_DNS=10.2.0.100
+      - SUBNET_RANGES=10.80.1.0/24
+      - WGUI_ENDPOINT_ADDRESS=gparrello.duckdns.org:51888
 
   pihole:
     depends_on:
@@ -84,3 +88,13 @@ services:
     networks:
       private_network:
         ipv4_address: 10.2.0.100
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "5380:80"
+    environment:
+      - TZ=Europe/Madrid
+      - WEBPASSWORD=admin
+      - PIHOLE_DNS_=10.2.0.200
+      - DNSSEC=true
