@@ -6,6 +6,7 @@ networks:
         - subnet: 10.53.0.0/24
 
 volumes:
+  unbound-conf:
   unbound:
   wireguard:
   wireguard-ui:
@@ -14,19 +15,27 @@ volumes:
   duckdns:
 
 services:
-  
-  gitsync:
-    image: k8s.gcr.io/git-sync:v3.1.3
+  symlink:
+    depends_on:
+      - curl
+      - unbound
+    image: busybox
+    # command: tail -f /dev/null
+    command: ln -s /unbound-conf/unbound.conf /unbound/unbound.conf
     volumes:
-      - unbound:/tmp
-    environment:
-      GIT_SYNC_REPO: https://github.com/gparrello/wirehole
-      GIT_SYNC_BRANCH: master
-      # GIT_SYNC_ROOT: /tmp
-      GIT_SYNC_DEST: wirehole
-      # GIT_SYNC_PERIOD: 20
-      GIT_SYNC_ONE_TIME: true
-      # GIT_SYNC_SPARSE_CHECKOUT_FILE: unbound
+      - unbound-conf:/unbound-conf
+      - unbound:/unbound
+      # - wireguard:/wireguard
+      # - wireguard-ui:/wireguard-ui
+      # - pihole-etc:/pihole-etc
+      # - pihole-dnsmasq:/pihole-dnsmasq
+      # - duckdns:/duckdns
+  
+  curl:
+    volumes:
+      - unbound-conf:/tmp
+    image: curlimages/curl:latest
+    command: -o /tmp/unbound.conf https://raw.githubusercontent.com/gparrello/wirehole/master/unbound/unbound.conf
 
   duckdns:
     image: lscr.io/linuxserver/duckdns:latest
@@ -40,14 +49,12 @@ services:
       - duckdns:/config
 
   unbound:
-    depends_on:
-      - gitsync
     image: mvance/unbound:latest
     container_name: unbound
     restart: unless-stopped
     hostname: unbound
     volumes:
-      - unbound/git/wirehole/unbound:/opt/unbound/etc/unbound/  # TODO: fix, can't mount volume subpath only
+      - unbound:/opt/unbound/etc/unbound
     networks:
       private_network:
         ipv4_address: 10.53.0.200
@@ -61,9 +68,14 @@ services:
     image: pihole/pihole:latest
     restart: unless-stopped
     hostname: pihole
+    environment:
+      - TZ=Europe/Madrid
+      - WEBPASSWORD=admin
+      - PIHOLE_DNS_=10.53.0.200
+      - DNSSEC=true
     dns:
       - 127.0.0.1
-      - ${PIHOLE_DNS}
+      - 10.53.0.100
     volumes:
       - pihole-etc:/etc/pihole/
       - pihole-dnsmasq:/etc/dnsmasq.d/
@@ -77,11 +89,7 @@ services:
       # - "53:53/udp"
       # - "67:67/udp"
       - "5380:80"
-    environment:
-      - TZ=Europe/Madrid
-      - WEBPASSWORD=admin
-      - PIHOLE_DNS_=10.53.0.200
-      - DNSSEC=true
+
 
   wireguard:
     depends_on:
@@ -115,7 +123,7 @@ services:
       options:
         max-size: 50m
     volumes:
-      - wireguard-ui/db:/app/db
+      - wireguard-ui:/app/db
       - wireguard:/config
     environment:
       - WGUI_DNS=10.53.0.100
